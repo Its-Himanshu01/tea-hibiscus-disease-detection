@@ -1,56 +1,14 @@
-# import streamlit as st
-# import tensorflow as tf
-# import numpy as np
-# from PIL import Image
-
-# model = tf.keras.models.load_model("tea_hibiscus_model.h5")
-
-# class_names = [
-#     "Hibiscus Citruspot",
-#     "Hibiscus Early_Mild_Spotting",
-#     "Hibiscus Fungal",
-#     "Hibiscus Healthy",
-#     "Hibiscus Mild_Edge_Damage",
-#     "Hibiscus Senescent",
-#     "Hibiscus Slightly_Diseased",
-#     "Hibiscus Wrinkled_Leaf",
-#     "Tea Algal Spotout",
-#     "Tea Brown Blight",
-#     "Tea Grey Blight",
-#     "Tea Healthy",
-#     "Tea Red Spot"
-# ]
-
-# st.title("Tea & Hibiscus Disease Detection")
-
-# uploaded_file = st.file_uploader(
-#     "Upload a leaf image",
-#     type=["jpg", "jpeg", "png"]
-# )
-
-# if uploaded_file is not None:
-#     image = Image.open(uploaded_file).convert("RGB")
-#     st.image(image, caption="Uploaded Image", use_container_width=True)
-
-#     img = image.resize((224, 224))
-#     img_array = np.array(img) / 255.0
-#     img_array = np.expand_dims(img_array, axis=0)
-
-#     prediction = model.predict(img_array)
-
-#     predicted_class = class_names[np.argmax(prediction)]
-#     confidence = np.max(prediction) * 100
-
-#     st.success(f"Prediction: {predicted_class}")
-#     st.info(f"Confidence: {confidence:.2f}%")
 
 import streamlit as st
 import tensorflow as tf
 import numpy as np
 from PIL import Image
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 
+# Load your existing trained model
 model = tf.keras.models.load_model("tea_hibiscus_model.h5")
 
+# The original 13 trained categories matching your folder dataset exactly
 class_names = [
     "Hibiscus Citruspot",
     "Hibiscus Early_Mild_Spotting",
@@ -67,7 +25,8 @@ class_names = [
     "Tea Red Spot"
 ]
 
-disease_info = {
+# Plant disease database lookup dictionary
+disease_info = { 
     "Hibiscus Citruspot": {
         "symptoms": "Yellow to brown circular spots appear on leaves.",
         "cause": "Fungal or bacterial infection.",
@@ -151,7 +110,7 @@ disease_info = {
 st.title("Tea & Hibiscus Disease Detection")
 
 uploaded_file = st.file_uploader(
-    "Upload a leaf image",
+    "Upload a Tea or Hibiscus leaf image",
     type=["jpg", "jpeg", "png"]
 )
 
@@ -159,23 +118,35 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Uploaded Image", use_container_width=True)
 
+    # Convert image to numpy array without arbitrary division
     img = image.resize((224, 224))
-    img_array = np.array(img) / 255.0
+    img_array = np.array(img, dtype=np.float32)
+    
+    # FIX: Run the MobileNetV2 preprocessing function matching Train.py perfectly
+    img_array = preprocess_input(img_array)
     img_array = np.expand_dims(img_array, axis=0)
 
-    prediction = model.predict(img_array)
+    # Perform prediction
+    prediction = model.predict(img_array, verbose=0)
+    
+    predicted_index = np.argmax(prediction)
+    confidence = float(np.max(prediction)) * 100
 
-    predicted_class = class_names[np.argmax(prediction)]
-    confidence = np.max(prediction) * 100
+    # GATEKEEPER FILTER: Block non-leaf data (dogs, bats, etc.) using confidence boundaries
+    if confidence < 80.0:
+        st.error("❌ Invalid Image Input")
+        st.warning("The uploaded image does not match features of a valid Tea or Hibiscus plant. Please try again with a clear leaf photo.")
+        st.info(f"System Identification Certainty: {confidence:.2f}% (Required baseline: >80.0%)")
+        st.stop()
+
+    predicted_class = class_names[predicted_index]
 
     st.success(f"Prediction: {predicted_class}")
-    st.info(f"Confidence: {confidence:.2f}%")
+    st.info(f"Confidence Score: {confidence:.2f}%")
 
     if predicted_class in disease_info:
         info = disease_info[predicted_class]
-
         st.subheader("Disease Details")
-
         st.write("**Symptoms:**", info["symptoms"])
         st.write("**Cause:**", info["cause"])
         st.write("**Impact:**", info["impact"])
